@@ -36,7 +36,7 @@ bind-address = 0.0.0.0
 - `curl -s http://localhost:8080/api/v1/snowflake/batch?count=20 | jq` to get a batch of 20 ids and pretty print it
 - `curl -s http://localhost:8080/api/v1/snowflake/652024909219758082/parse | jq` to see the individual parts of an id
 
-### Load testing
+### Load testing & Optimization
 
 - We did a load test using `wrk` with the command `wrk -t12 -c400 -d30s --latency http://localhost:8080/api/v1/snowflake/next` and below are the results:
 ```
@@ -55,6 +55,43 @@ Running 30s test @ http://localhost:8080/api/v1/snowflake/next
 Requests/sec:  55843.62
 Transfer/sec:      9.97MB
 ```
+
+- When I ran the load test and added some logs I saw "CAS Failed" logs very frequently. Which made me think that a lot of the times Ids which were generated had to be thrown because of contention.
+- I asked the AI if there is something we can do to resolve it. It mentioned to use Lock strategy instead of CAS.
+- Reason was that CAS is sort of like Optimistic Locking. Under high load CAS creates a "spin loop" where 
+  - 100 threads try to get an ID at the same time.
+  - All 100 reads the same `oldState`
+  - 1 thread succeeds in updating it.
+  - 99 threads fail, and loop to try again. This wastes CPU cycles calculating IDs that get thrown away.
+- So, we should use Pessimistic Locking because the critical section is extremely fast - which is just bitwisse maths
+- When critical section is this short, locking is _often faster than CAS under high load_. Reason being that a lock queues the threads so they execute one by one, rather than making them spin and fight each other.
+- It added a Benchmark for testing both strategy and after running the Benchmark below are the results.
+
+```
+Benchmark                             Mode  Cnt     Score     Error   Units
+SnowflakeBenchmark.testCasStrategy   thrpt    5  2910.920 ± 203.849  ops/ms
+SnowflakeBenchmark.testLockStrategy  thrpt    5  4095.673 ±   8.251  ops/ms
+```
+- Clearly, lockStrategy is running at the near theoretical limit of ID generation.
+- I reran the load test and below are the results:
+```
+Running 30s test @ http://localhost:8080/api/v1/snowflake/next
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     8.58ms   14.45ms 453.65ms   95.76%
+    Req/Sec     4.75k   526.51     5.73k    93.00%
+  Latency Distribution
+     50%    6.23ms
+     75%    7.20ms
+     90%   12.53ms
+     99%   46.28ms
+  1699668 requests in 30.04s, 303.42MB read
+Requests/sec:  56571.14
+Transfer/sec:     10.10MB
+```
+- Throughput increased by approx 728 req/sec
+- To increase the throughput I used `spring.threads.virtual.enabled=true` property also, but it didn't increase.
+- I also tried to start with the min heap size of 1GB and Max 2GB so that GC occurs less frequently, but that also didn't improve the throughput.
 
 ### Tasks Remaining
 

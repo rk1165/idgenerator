@@ -4,7 +4,7 @@ import com.snowflake.ApplicationConstants;
 import com.snowflake.model.SnowflakeBatch;
 import com.snowflake.model.SnowflakeId;
 import com.snowflake.model.SnowflakeParsed;
-import com.snowflake.service.SnowflakeIdGenerator;
+import com.snowflake.service.SnowflakeIdGeneratorLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +19,7 @@ import java.time.Instant;
 @Slf4j
 public class SnowflakeController {
 
-    private final SnowflakeIdGenerator generator;
+    private final SnowflakeIdGeneratorLock generator;
 
     /**
      * Get an Id
@@ -41,7 +41,7 @@ public class SnowflakeController {
      */
     @GetMapping("/batch")
     public SnowflakeBatch batchIds(@RequestParam(defaultValue = "10") int count) throws UnknownHostException {
-        if (count > ApplicationConstants.MAX_BATCH_SIZE) count = ApplicationConstants.MAX_BATCH_SIZE; // cap batch size
+        count = Math.min(count, ApplicationConstants.MAX_BATCH_SIZE);
 
         SnowflakeId[] snowflakeIds = new SnowflakeId[count];
         for (int i = 0; i < count; i++) {

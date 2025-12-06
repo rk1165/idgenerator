@@ -12,12 +12,12 @@ import static com.snowflake.ApplicationConstants.*;
 @Slf4j
 @Data
 @Component
-public class SnowflakeIdGenerator {
+public class SnowflakeIdGeneratorCAS {
 
     private final long nodeId;
     private final AtomicLong state = new AtomicLong(0L); // packs [lastTimestamp | sequence]
 
-    public SnowflakeIdGenerator(NodeIdProvider nodeIdProvider) {
+    public SnowflakeIdGeneratorCAS(NodeIdProvider nodeIdProvider) {
         this.nodeId = nodeIdProvider.getNodeId();
     }
 
@@ -36,8 +36,8 @@ public class SnowflakeIdGenerator {
 
             // Clock moved backwards - critical error
             // currentTimeStamp is always supposed to be after the lastTimeStamp because lastTimeStamp is the
-            // timestamp when previous id generation took place but suppose because of a clock drift the currentTimeStamp
-            // becomes earlier than the lastTimeStamp during which we have already generated the id
+            // timestamp when previous id generation took place. Suppose because of a clock drift the currentTimeStamp
+            // becomes earlier than the lastTimeStamp during which we have already generated the id.
             if (currentTimestamp < lastTimestamp) {
                 long drift = lastTimestamp - currentTimestamp;
                 // fail fast

@@ -1,5 +1,7 @@
+PORT ?=8080
+
 run:
-	./gradlew bootRun
+	./gradlew bootRun -Dserver.port=$(PORT)
 
 debug:
 	./gradlew bootRun --debug-jvm
@@ -10,4 +12,7 @@ build:
 clean:
 	./gradlew clean
 
-PHONY: run debug build clean
+jmh:
+	./gradlew jmh
+
+PHONY: run debug build clean jmh
